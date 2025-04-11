@@ -1,5 +1,4 @@
-﻿using System.IO.Compression;
-using ShapeCrawler;
+﻿using ShapeCrawler;
 
 if (args.Length < 2)
 {
@@ -69,20 +68,21 @@ foreach (var slide in pres.Slides)
 pres.Save(outputPath);
 
 // Releasing resources
-pres.Dispose();
+// pres.Dispose();
 
-using var zip = ZipFile.Open(outputPath, ZipArchiveMode.Update);
-
-foreach (var entry in zip.Entries)
-{
-    if (entry.FullName.StartsWith("ppt/media/") && entry.FullName.EndsWith(".png") && entry.Crc32 == 859486013)
-    {
-        await using (var stream = entry.Open())
-        {
-            stream.SetLength(0);
-            stream.Write(images[0], 0, images[0].Length);
-        }
-
-        images.RemoveAt(0);
-    }
-}
+// Changing video thumbnails
+// using var zip = ZipFile.Open(outputPath, ZipArchiveMode.Update);
+//
+// foreach (var entry in zip.Entries)
+// {
+//     if (entry.FullName.StartsWith("ppt/media/") && entry.FullName.EndsWith(".png") && entry.Crc32 == 859486013)
+//     {
+//         await using (var stream = entry.Open())
+//         {
+//             stream.SetLength(0);
+//             stream.Write(images[0], 0, images[0].Length);
+//         }
+//
+//         images.RemoveAt(0);
+//     }
+// }
