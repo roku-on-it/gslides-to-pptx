@@ -10,7 +10,6 @@ string inputPath = args[0];
 string outputPath = args[1];
 
 var pres = new Presentation(inputPath);
-
 var http = new HttpClient();
 
 foreach (var slide in pres.Slides)
@@ -18,22 +17,38 @@ foreach (var slide in pres.Slides)
     foreach (var shape in slide.Shapes)
     {
         var url = shape.AltText;
-        if (url.Contains("video"))
+        if (string.IsNullOrEmpty(url) || url.StartsWith("http://"))
         {
-            using (var httpStream = http.GetStreamAsync(url).Result)
-            using (var memoryStream = new MemoryStream())
+            continue;
+        }
+
+        try
+        {
+            var request = new HttpRequestMessage(HttpMethod.Head, url);
+            var response = await http.SendAsync(request);
+            if (response.IsSuccessStatusCode)
             {
-                httpStream.CopyTo(memoryStream);
-                memoryStream.Position = 0;
+                if (response.Content.Headers.ContentType?.MediaType?.StartsWith("video") == true)
+                {
+                    using (var videoStream = await http.GetStreamAsync(url))
+                    using (var videoMemoryStream = new MemoryStream())
+                    { 
+                        await videoStream.CopyToAsync(videoMemoryStream);
+                        videoMemoryStream.Position = 0;
 
-                slide.Shapes.AddVideo(703, 76, memoryStream);
-
-                var lastShape = slide.Shapes.Last();
-                lastShape.Height = 435;
-                lastShape.Width = 245;
+                        slide.Shapes.AddVideo(Convert.ToInt32(shape.X), Convert.ToInt32(shape.Y), videoMemoryStream);
+                        var addedVideo = slide.Shapes.Last();
+                        addedVideo.Width = shape.Width;
+                        addedVideo.Height = shape.Height;
+                    }
+                }
             }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error processing shape with URL {url}: {ex.Message}");
         }
     }
 }
 
-pres.SaveAs(outputPath);
+pres.Save(outputPath);
