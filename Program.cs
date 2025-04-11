@@ -1,4 +1,5 @@
-﻿using ShapeCrawler;
+﻿using System.IO.Compression;
+using ShapeCrawler;
 
 if (args.Length < 2)
 {
@@ -11,16 +12,28 @@ string outputPath = args[1];
 
 var pres = new Presentation(inputPath);
 var http = new HttpClient();
+var images = new List<byte[]>();
 
 foreach (var slide in pres.Slides)
 {
-    foreach (var shape in slide.Shapes)
+    var shapesToProcess = new List<(IShape Shape, string Url)>();
+
+    for (int i = 0; i < slide.Shapes.Count; i++)
     {
+        var shape = slide.Shapes[i];
         var url = shape.AltText;
-        if (string.IsNullOrEmpty(url) || url.StartsWith("http://"))
+        if (!string.IsNullOrEmpty(url) && !url.StartsWith("http://"))
         {
-            continue;
+            var imgBytes = ((shape as IPicture)!).Image!.AsByteArray();
+            images.Add(imgBytes);
+            shapesToProcess.Add((shape, url));
         }
+    }
+
+    foreach (var item in shapesToProcess)
+    {
+        var shape = item.Shape;
+        var url = item.Url;
 
         try
         {
@@ -32,7 +45,7 @@ foreach (var slide in pres.Slides)
                 {
                     using (var videoStream = await http.GetStreamAsync(url))
                     using (var videoMemoryStream = new MemoryStream())
-                    { 
+                    {
                         await videoStream.CopyToAsync(videoMemoryStream);
                         videoMemoryStream.Position = 0;
 
@@ -43,6 +56,8 @@ foreach (var slide in pres.Slides)
                     }
                 }
             }
+
+            shape.Remove();
         }
         catch (Exception ex)
         {
@@ -52,3 +67,22 @@ foreach (var slide in pres.Slides)
 }
 
 pres.Save(outputPath);
+
+// Releasing resources
+pres.Dispose();
+
+using var zip = ZipFile.Open(outputPath, ZipArchiveMode.Update);
+
+foreach (var entry in zip.Entries)
+{
+    if (entry.FullName.StartsWith("ppt/media/") && entry.FullName.EndsWith(".png") && entry.Crc32 == 859486013)
+    {
+        await using (var stream = entry.Open())
+        {
+            stream.SetLength(0);
+            stream.Write(images[0], 0, images[0].Length);
+        }
+
+        images.RemoveAt(0);
+    }
+}
